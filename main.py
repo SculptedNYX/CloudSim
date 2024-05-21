@@ -7,7 +7,15 @@ user_wait_times = []
 admin_wait_times = []
 SIMULATION_TIME = 180
 WEBSITE_SIZE = 150
-waited = 0
+
+# count of entities
+user = 0
+admin = 0
+
+# waiting variables
+user_who_wait = 0
+admin_who_wait = 0
+
 
 class CloudProvider:
     def __init__(self, env, num_of_nodes, num_of_helpdesks, num_of_seniors):
@@ -43,6 +51,8 @@ def esclate_to_senior(env, user, CloudProvider, problem, service_time):
     if time <= 0:
         user_wait_times.append(0)
     else:
+        global user_who_wait
+        user_who_wait = user_who_wait + 1
         user_wait_times.append(time)
 
 def admin_panel(env, user, CloudProvider):
@@ -57,9 +67,11 @@ def admin_panel(env, user, CloudProvider):
     if time <= 0:
         admin_wait_times.append(0)
     else:
+        global admin_who_wait
+        admin_who_wait = admin_who_wait + 1
         admin_wait_times.append(time)
 
-def open_website(env, user, CloudProvider, internet_speed):
+def open_website(env, user, is_admin, CloudProvider, internet_speed):
     service_time = random.randint(1,3) + WEBSITE_SIZE/internet_speed # Random time to browse + the speed of loading
     arrival_time = env.now
     # Request a node for web
@@ -68,9 +80,16 @@ def open_website(env, user, CloudProvider, internet_speed):
         yield env.process(CloudProvider.utilize_web_service(user, service_time))
 
     time = env.now - arrival_time - service_time
+
     if time  <= 0:
         user_wait_times.append(0)
+    elif is_admin:
+        global admin_who_wait
+        admin_who_wait = admin_who_wait + 1
+        admin_wait_times.append(time)
     else:
+        global user_who_wait
+        user_who_wait = user_who_wait + 1
         user_wait_times.append(time)
 
 def access_bucket(env, user, CloudProvider, internet_speed):
@@ -86,6 +105,8 @@ def access_bucket(env, user, CloudProvider, internet_speed):
     if time  <= 0:
         user_wait_times.append(0)
     else:
+        global user_who_wait
+        user_who_wait = user_who_wait + 1
         user_wait_times.append(time)
 
 def call_helpdesk(env, user, CloudProvider):
@@ -99,7 +120,7 @@ def call_helpdesk(env, user, CloudProvider):
     
     help_wait = env.now - arrival_time - service_time
 
-    if random.randint(1,10) == 1:
+    if random.randint(1,1) == 1:
         problem = random.choice(["software", "hardware"])
         if problem == "software":
             senior_time = random.randint(1,2)
@@ -117,17 +138,22 @@ def call_helpdesk(env, user, CloudProvider):
     if time  <= 0:
         user_wait_times.append(0)
     else:
+        global user_who_wait
+        user_who_wait = user_who_wait + 1
         user_wait_times.append(time)
 
 def run_cloud(env, num_of_nodes, num_of_helpdesks, num_of_seniors):
     # Initlize the cloud
     cloud = CloudProvider(env, num_of_nodes, num_of_helpdesks, num_of_seniors)
     
-    user = 0
+    global user
+    global admin
+
     while True:
         waited = 0
         user = user + 1 # Increment user
         if (random.randint(1,10) == 1):
+            admin = admin + 1
             is_admin = True
             internet_speed = 1000 # Give admin internet speed
         else:
@@ -145,7 +171,7 @@ def run_cloud(env, num_of_nodes, num_of_helpdesks, num_of_seniors):
             if random.choice([True, False]):
                 # Access site
                 print("Accessed site")
-                env.process(open_website(env, user, cloud, internet_speed)) # Request website
+                env.process(open_website(env, user, is_admin, cloud, internet_speed)) # Request website
 
         else:
             # Begin Customer cycle
@@ -157,7 +183,7 @@ def run_cloud(env, num_of_nodes, num_of_helpdesks, num_of_seniors):
 
             # Access site
             print("Accessed site")
-            env.process(open_website(env, user, cloud, internet_speed)) # Request website
+            env.process(open_website(env, user, is_admin, cloud, internet_speed)) # Request website
 
             if random.choice([True, False]):
                 print("Accessed bucket")
@@ -166,12 +192,13 @@ def run_cloud(env, num_of_nodes, num_of_helpdesks, num_of_seniors):
 
         yield env.timeout(random.randint(10, 50)/60) # Randomized interarrival times
         
-def get_avg_wait_time(wait_times):
-    avg_wait = statistics.mean(wait_times)
+def get_avg_wait_time(wait_times, dividor):
+    arrsum = sum(wait_times)
+    avg_wait = arrsum/dividor
     # Calculate time
     minutes, frac_minutes = divmod(avg_wait, 1)
     seconds = frac_minutes * 60
-    return round(minutes), round(seconds)
+    return round(minutes), round(seconds), arrsum
 
 # Get user input
 def user_input():
@@ -193,9 +220,13 @@ def main():
     env.process(run_cloud(env, num_of_nodes, num_of_helpdesks, num_of_seniors))
     env.run(until=SIMULATION_TIME)
 
-    umins, usecs = get_avg_wait_time(user_wait_times)
-    amins, asecs = get_avg_wait_time(admin_wait_times)
+    umins, usecs, usum = get_avg_wait_time(user_wait_times, user)
+    amins, asecs, asum = get_avg_wait_time(admin_wait_times, admin)
     print(f"The avg wait time for users is {umins} minutes and {usecs} seconds")
     print(f"The avg wait time for admins is {amins} minutes and {asecs} seconds")
+    print(f"The probabity of wait time for users is {round(user_who_wait/user,2)}")
+    print(f"The probabity of wait time for admins is {round(admin_who_wait/admin,2)}")
+    print(f"Average time for users who wait is {round(usum/user_who_wait,2)}")
+    print(f"Average time for admins who wait is {round(asum/admin_who_wait,2)}")
 
 main()

@@ -120,7 +120,7 @@ def call_helpdesk(env, user, CloudProvider):
     
     help_wait = env.now - arrival_time - service_time
 
-    if random.randint(1,1) == 1:
+    if random.randint(1,10) == 1:
         problem = random.choice(["software", "hardware"])
         if problem == "software":
             senior_time = random.randint(1,2)
@@ -150,7 +150,6 @@ def run_cloud(env, num_of_nodes, num_of_helpdesks, num_of_seniors):
     global admin
 
     while True:
-        waited = 0
         user = user + 1 # Increment user
         if (random.randint(1,10) == 1):
             admin = admin + 1
